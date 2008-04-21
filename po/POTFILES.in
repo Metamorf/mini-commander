@@ -1,0 +1,11 @@
+data/GNOME_MiniCommanderApplet.xml
+src/about.c
+src/command_line.c
+src/mc-install-default-macros.c
+data/mini-commander-global.schemas.in
+data/mini-commander.schemas.in
+data/mini-commander.ui
+src/mini-commander_applet.c
+src/preferences.c
+data/mini-commander.glade
+data/GNOME_MiniCommanderApplet.server.in
