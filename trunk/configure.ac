@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.61)
-AC_INIT(MINI_COMMANDER, 1.0.0.Fork.0.3, email@michaelwood.me.uk)
+AC_INIT(MINI_COMMANDER, 2.23.0, email@michaelwood.me.uk)
 AC_CONFIG_SRCDIR([src/macro.h])
 AC_CONFIG_MACRO_DIR(m4)
 AM_GCONF_SOURCE_2
