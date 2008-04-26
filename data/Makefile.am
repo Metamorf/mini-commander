@@ -1,4 +1,4 @@
-builderdir="${pkgdatadir}/builder"
+builderdir=@builderdir@
 builder_DATA = mini-commander.ui
 
 BITMAPS = 			\

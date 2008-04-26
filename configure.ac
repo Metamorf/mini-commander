@@ -9,6 +9,12 @@ AM_GCONF_SOURCE_2
 
 AC_CONFIG_HEADER([config.h])
 
+pkgdatadir="${datadir}/mini_commander"
+AC_SUBST(pkgdatadir)
+builderdir="${pkgdatadir}/builder"
+AC_SUBST(builderdir)
+
+
 AC_DEFINE_DIR(DATADIR, "${datadir}", [datadir])
 AC_DEFINE_DIR(GNOMELOCALEDIR, "${datadir}/locale", [locale directory])
 AC_DEFINE_DIR(SYSCONFDIR, "${sysconfdir}", [sysconfdir])
