@@ -33,6 +33,7 @@ void about_box (BonoboUIComponent *uic,
 	static const gchar *authors[] = {
 		"Oliver Maruhn <oliver@maruhn.com>",
 		"Mark McLoughlin <mark@skynet.ie>",
+		"Michael Wood <email@michaelwood.me.uk>",
 		NULL
 	};
 
