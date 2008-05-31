@@ -28,7 +28,7 @@
 
 G_BEGIN_DECLS
 
-#include <gtk/gtkwidget.h>
+#include <gtk/gtk.h>
 #include <panel-applet.h>
 
 typedef struct _MCData MCData;
@@ -41,6 +41,8 @@ typedef struct _MCData MCData;
 #define MC_MAX_COMMAND_LENGTH           505
 #define MC_MAX_NUM_MACRO_PARAMETERS     100
 
+#define BORDER 4
+
 struct _MCData {
     PanelApplet   *applet;
 
@@ -49,11 +51,19 @@ struct _MCData {
     GtkWidget     *entry;
     GtkWidget     *file_select;
 
+    GtkWidget *file_select_button;
+    GtkWidget *history_button;
+    GtkWidget *file_select_image;
+    GtkWidget *history_image;
+
+    gboolean default_background;
+
+
     int            label_timeout;
-    int            cmd_line_size_y;
 
     MCPreferences  preferences;
     MCPrefsDialog  prefs_dialog;
+    GtkTooltips *tooltips;
 
     guint          listeners [MC_NUM_LISTENERS];
     gboolean       error;

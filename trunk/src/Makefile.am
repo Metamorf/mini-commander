@@ -31,7 +31,10 @@ mini_commander_applet_SOURCES =			\
 	macro.h					\
 	preferences.c				\
 	preferences.h				\
-	mc-default-macros.h
+	mc-default-macros.h				\
+	icon-entry.c				\
+	icon-entry.h
+
 
 mini_commander_applet_LDADD =	\
 	$(MINI_COMMANDER_LIBS)

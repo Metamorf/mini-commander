@@ -34,6 +34,7 @@
 #include <gtk/gtkstock.h>
 #include <gtk/gtktreeselection.h>
 #include <gtk/gtktreeview.h>
+#include <gtk/gtkimage.h>
 
 #include <panel-applet.h>
 
@@ -43,12 +44,14 @@
 #include "exec.h"
 #include "cmd_completion.h"
 #include "history.h"
+#include "icon-entry.h"
 
 static gint file_browser_response_signal(GtkWidget *widget, gint response, gpointer mc_data);
 static gint history_popup_clicked_cb(GtkWidget *widget, gpointer data);
 static gint history_popup_clicked_inside_cb(GtkWidget *widget, gpointer data);
 static gchar* history_auto_complete(GtkWidget *widget, GdkEventKey *event);
-
+gboolean history_window_expose_event (GtkWidget *widget,  GdkEventExpose  *event,
+    gpointer user_data);
 
 static int history_position = MC_HISTORY_LIST_LENGTH;
 static gchar *browsed_folder = NULL;
@@ -67,6 +70,22 @@ button_press_cb (GtkEntry       *entry,
 	   str = gtk_editable_get_chars (GTK_EDITABLE (entry), 0, -1);
 	   gtk_entry_set_text (entry, (gchar *) str + 3);
 	}
+    return FALSE;
+}
+
+/* This is a hack around the fact that gtk+ doesn't
+ * propogate button presses on button2/3.
+ */
+static gboolean
+button_press_hack (GtkWidget      *widget,
+		   GdkEventButton *event,
+		   MCData         *mc)
+{
+    if (event->button == 3 || event->button == 2) {
+	gtk_propagate_event (GTK_WIDGET (mc->applet), (GdkEvent *) event);
+	return TRUE;
+    }
+
     return FALSE;
 }
 
@@ -95,9 +114,10 @@ command_key_event (GtkEntry   *entry,
             if(event->state == GDK_CONTROL_MASK)
                 {
                     /*
-                     * Move focus to the next widget (browser) button.
+                     * Move focus to the next applet.
                      */
-                    gtk_widget_child_focus (GTK_WIDGET (mc->applet), GTK_DIR_TAB_FORWARD);
+                    gtk_widget_child_focus (gtk_widget_get_toplevel(GTK_WIDGET(mc->applet)),
+                        GTK_DIR_TAB_FORWARD);
 	            propagate_event = FALSE;
                 }
             else if(event->state != GDK_SHIFT_MASK)
@@ -278,7 +298,7 @@ history_list_button_press_cb (GtkWidget      *widget,
                             0, &command, -1);
         mc_exec_command(mc, command);
         g_free (command);
-        gtk_widget_destroy(GTK_WIDGET(widget->parent->parent->parent));
+        gtk_widget_destroy(GTK_WIDGET(widget->parent->parent));
 
 	return TRUE;
     }
@@ -286,12 +306,26 @@ history_list_button_press_cb (GtkWidget      *widget,
     return FALSE;
 }
 
-int 
-mc_show_history (GtkWidget *widget,
+gboolean
+history_window_expose_event (GtkWidget       *widget,
+    GdkEventExpose  *event,
+    gpointer         user_data)
+{
+
+  gint width, height;
+
+  gdk_drawable_get_size (widget->window, &width, &height);
+  gdk_draw_rectangle (widget->window, widget->style->black_gc, FALSE,
+    0, 0, width-1, height-1);
+  return FALSE;
+}
+
+gboolean
+mc_show_history (GtkWidget      *event_box, 
+                         GdkEventButton *event,
 		 MCData    *mc)
 {
      GtkWidget *window;
-     GtkWidget *frame;
      GtkWidget *scrolled_window;
      GtkListStore *store;
      GtkTreeIter iter;
@@ -302,7 +336,8 @@ mc_show_history (GtkWidget *widget,
      GtkRequisition  req;
      gchar *command_list[1];
      int i, j;
-     gint x, y, width, height, screen_width, screen_height;
+     gint win_x, win_y, width, height;
+     gint entry_h, entry_x, entry_y, applet_x, applet_y;
 
      /* count commands stored in history list */
      for(i = 0, j = 0; i < MC_HISTORY_LIST_LENGTH; i++)
@@ -313,6 +348,7 @@ mc_show_history (GtkWidget *widget,
      gtk_window_set_screen (GTK_WINDOW (window),
 			    gtk_widget_get_screen (GTK_WIDGET (mc->applet)));
      gtk_window_set_policy(GTK_WINDOW(window), 0, 0, 1);
+     gtk_widget_set_app_paintable (window, TRUE);
      gtk_window_set_type_hint(GTK_WINDOW(window), GDK_WINDOW_TYPE_HINT_COMBO);
      /* cb */
      g_signal_connect_after(GTK_OBJECT(window),
@@ -321,17 +357,18 @@ mc_show_history (GtkWidget *widget,
 			      NULL);
      g_signal_connect_after (G_OBJECT (window), "key_press_event",
      		       G_CALLBACK (history_key_press_cb), NULL);
-     
-     /* size */
-     gtk_widget_set_usize(GTK_WIDGET(window), 200, 350);
-     
-     
-     /* frame */
-     frame = gtk_frame_new(NULL);
-     gtk_frame_set_shadow_type(GTK_FRAME(frame), GTK_SHADOW_OUT);
-     gtk_widget_show(frame);
-     gtk_container_add(GTK_CONTAINER(window), frame);
-     
+
+     gdk_window_get_geometry (GTK_WIDGET (mc->applet_box)->window, NULL, NULL,
+         &width, &height, NULL);
+     gdk_window_get_origin (mc->applet_box->window, &applet_x, &applet_y);
+     gdk_window_get_position (mc->entry->window, &entry_x, &entry_y);
+     gdk_drawable_get_size (mc->entry->window, NULL, &entry_h);
+
+      win_x=applet_x + entry_x-1;
+      win_y=applet_y + entry_y;
+
+      /* size */
+      gtk_widget_set_usize(GTK_WIDGET(window), width-2*(entry_x-1), 350);
      /* scrollbars */
      /* create scrolled window to put the Gtk_list widget inside */
      scrolled_window=gtk_scrolled_window_new(NULL, NULL);
@@ -339,11 +376,11 @@ mc_show_history (GtkWidget *widget,
 				    GTK_POLICY_AUTOMATIC,
 				    GTK_POLICY_AUTOMATIC);
      g_signal_connect(GTK_OBJECT(scrolled_window),
-			"button_press_event",
+			"button_release_event",
 			GTK_SIGNAL_FUNC(history_popup_clicked_inside_cb),
 			NULL);
-     gtk_container_add(GTK_CONTAINER(frame), scrolled_window);
-     gtk_container_set_border_width (GTK_CONTAINER(scrolled_window), 2);
+     gtk_container_add(GTK_CONTAINER(window), scrolled_window);
+     gtk_container_set_border_width (GTK_CONTAINER(scrolled_window), 1);
      gtk_widget_show(scrolled_window);
           
      store = gtk_list_store_new (1, G_TYPE_STRING);
@@ -392,30 +429,24 @@ mc_show_history (GtkWidget *widget,
      gtk_widget_show (treeview); 
      
      gtk_widget_size_request (window, &req);
-     gdk_window_get_origin (GTK_WIDGET (mc->applet)->window, &x, &y);
-     gdk_window_get_geometry (GTK_WIDGET (mc->applet)->window, NULL, NULL,
-     			      &width, &height, NULL);
+
    
      switch (panel_applet_get_orient (mc->applet)) {
+        case PANEL_APPLET_ORIENT_RIGHT:
+        case PANEL_APPLET_ORIENT_LEFT:
      case PANEL_APPLET_ORIENT_DOWN:
-        y += height;
+            win_y += (entry_h+BORDER-1);
      	break;
+        
      case PANEL_APPLET_ORIENT_UP:
-        y -= req.height;
-     	break;
-     case PANEL_APPLET_ORIENT_LEFT:
-     	x -= req.width;
-	break;
-     case PANEL_APPLET_ORIENT_RIGHT:
-     	x += width;
+            win_y -= (req.height+BORDER-1);
 	break;
      }
 
-     screen_width = gdk_screen_width ();
-     screen_height = gdk_screen_height ();
-     x = CLAMP (x - 2, 0, MAX (0, screen_width - req.width));
-     y = CLAMP (y - 2, 0, MAX (0, screen_height - req.height));
-     gtk_window_move (GTK_WINDOW (window), x, y);
+     gtk_window_move (GTK_WINDOW (window), win_x, win_y);
+     g_signal_connect ((gpointer) window, "expose_event",
+                    G_CALLBACK (history_window_expose_event),
+                    NULL);
      gtk_widget_show(window);
 
      /* grab focus */
@@ -465,8 +496,9 @@ file_browser_response_signal(GtkWidget *widget, gint response, gpointer mc_data)
     return FALSE;  
 }
 
-int 
-mc_show_file_browser (GtkWidget *widget,
+gboolean
+mc_show_file_browser (GtkWidget *event_box, 
+                         GdkEventButton *event,
 		      MCData    *mc)
 {
     if(mc->file_select && GTK_WIDGET_VISIBLE(mc->file_select)) {
@@ -507,13 +539,40 @@ mc_show_file_browser (GtkWidget *widget,
 void
 mc_create_command_entry (MCData *mc)
 {
-    mc->entry = gtk_entry_new_with_max_length (MC_MAX_COMMAND_LENGTH); 
+
+    mc->applet_box = icon_entry_new ();
+    mc->entry= ICON_ENTRY(mc->applet_box)->entry;
+    g_object_set_data (G_OBJECT (mc->applet_box), "mcdata", mc);
+    gtk_entry_set_max_length (GTK_ENTRY (mc->entry), MC_MAX_COMMAND_LENGTH);
+    
+    mc->history_button = gtk_event_box_new ();
+    gtk_event_box_set_visible_window (GTK_EVENT_BOX (mc->history_button), FALSE);
+    mc->history_image = gtk_image_new_from_stock ("gtk-go-down", 
+        GTK_ICON_SIZE_MENU);
+    gtk_widget_show (mc->history_image);
+    gtk_container_add (GTK_CONTAINER (mc->history_button), mc->history_image);
+    icon_entry_pack_widget (ICON_ENTRY(mc->applet_box), mc->history_button, FALSE);
+    
+    mc->file_select_button = gtk_event_box_new ();
+    gtk_event_box_set_visible_window (GTK_EVENT_BOX (mc->file_select_button), FALSE);
+    mc->file_select_image = gtk_image_new_from_stock ("gtk-open", 
+        GTK_ICON_SIZE_MENU);
+    gtk_widget_show (mc->file_select_image);
+    gtk_container_add (GTK_CONTAINER (mc->file_select_button), mc->file_select_image);
+    icon_entry_pack_widget (ICON_ENTRY(mc->applet_box), 
+        mc->file_select_button, FALSE);
     
     g_signal_connect (mc->entry, "key_press_event",
 		      G_CALLBACK (command_key_event), mc);
    
     g_signal_connect (mc->entry, "button_press_event",
 		      G_CALLBACK (button_press_cb), mc);
+
+    g_signal_connect (mc->file_select_button, "button_press_event",
+		      G_CALLBACK (button_press_hack), mc);
+          
+    g_signal_connect (mc->history_button, "button_press_event",
+		      G_CALLBACK (button_press_hack), mc);
 
     if (!mc->preferences.show_default_theme)
     {
@@ -564,7 +623,9 @@ mc_command_update_entry_color (MCData *mc)
     bg.blue  = mc->preferences.cmd_line_color_bg_b;
 
     gtk_widget_modify_base (mc->entry, GTK_STATE_NORMAL, &bg);
-    gtk_widget_modify_base (mc->entry, GTK_STATE_PRELIGHT, &bg);
+    
+    gtk_widget_queue_draw (mc->applet_box);
+   
 }
 
 void
@@ -573,12 +634,9 @@ mc_command_update_entry_size (MCData *mc)
     int size_x = -1;
     
     size_x = mc->preferences.normal_size_x - 17;
-    if ((mc->orient == PANEL_APPLET_ORIENT_LEFT) || (mc->orient == PANEL_APPLET_ORIENT_RIGHT)) {
-      size_x = MIN(size_x, mc->preferences.panel_size_x - 17);
-      gtk_widget_set_size_request (GTK_WIDGET (mc->entry), size_x, -1);
-    } else {
-      gtk_widget_set_size_request (GTK_WIDGET (mc->entry), size_x, mc->preferences.normal_size_y+2);
-    }
+
+   gtk_widget_set_size_request (GTK_WIDGET (mc->applet_box), size_x, -1);
+
 }
 
 
@@ -604,4 +662,3 @@ history_auto_complete(GtkWidget *widget, GdkEventKey *event)
     
     return NULL;
 }
-

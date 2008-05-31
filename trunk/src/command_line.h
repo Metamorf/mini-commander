@@ -29,10 +29,14 @@ G_BEGIN_DECLS
 #include "mini-commander_applet.h"
 
 void       mc_create_command_entry       (MCData    *mc);
-int        mc_show_history               (GtkWidget *widget,
+gboolean mc_show_history (GtkWidget *event_box, 
+                         GdkEventButton *event,
 				          MCData    *mc);
-int        mc_show_file_browser          (GtkWidget *widget,
+
+gboolean mc_show_file_browser (GtkWidget *event_box, 
+                         GdkEventButton *event,
 				          MCData    *mc);
+
 void       mc_command_update_entry_color (MCData    *mc);
 void       mc_command_update_entry_size  (MCData    *mc);
 
