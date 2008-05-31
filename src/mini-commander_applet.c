@@ -46,17 +46,6 @@
 #include "about.h"
 #include "help.h"
 
-#include "data/browser-mini.xpm"
-#include "data/history-mini.xpm"
-
-#define COMMANDLINE_BROWSER_STOCK "commandline-browser"
-#define COMMANDLINE_HISTORY_STOCK "commandline-history"
- 
-#define COMMANDLINE_DEFAULT_ICON_SIZE 6
-
-static gboolean icons_initialized = FALSE;
-static GtkIconSize button_icon_size = 0;
-
 static const BonoboUIVerb mini_commander_menu_verbs [] = {
         BONOBO_UI_UNSAFE_VERB ("Props", mc_show_preferences),
         BONOBO_UI_UNSAFE_VERB ("Help",  show_help),
@@ -64,59 +53,6 @@ static const BonoboUIVerb mini_commander_menu_verbs [] = {
 
         BONOBO_UI_VERB_END
 };
-
-typedef struct {
-    char *stock_id;
-    const char **icon_data;
-} CommandLineStockIcon;
-
-static CommandLineStockIcon items[] = {
-    { COMMANDLINE_BROWSER_STOCK, browser_mini_xpm },
-    { COMMANDLINE_HISTORY_STOCK, history_mini_xpm }
-};
-
-static void
-register_command_line_stock_icons (GtkIconFactory *factory)
-{
-    gint i;
-
-    for (i = 0; i < G_N_ELEMENTS (items); ++i) {
-       GtkIconSet *icon_set;
-       GdkPixbuf *pixbuf;
-
-       pixbuf = gdk_pixbuf_new_from_xpm_data ((items[i].icon_data));
-
-       icon_set = gtk_icon_set_new_from_pixbuf (pixbuf);
-       gtk_icon_factory_add (factory, items[i].stock_id, icon_set);
-
-       gtk_icon_set_unref (icon_set);
-       g_object_unref (G_OBJECT (pixbuf));
-    }
-
-}
-
-static void
-command_line_init_stock_icons (void)
-{
-
-    GtkIconFactory *factory;
-
-    if (icons_initialized)
-	    return;
-
-    factory = gtk_icon_factory_new ();
-    gtk_icon_factory_add_default (factory);
-
-    register_command_line_stock_icons (factory);
-
-    button_icon_size = gtk_icon_size_register ("mini-commander-icon",
-                                                 COMMANDLINE_DEFAULT_ICON_SIZE,
-                                                 COMMANDLINE_DEFAULT_ICON_SIZE);
-
-    icons_initialized = TRUE;
-    g_object_unref (factory);
-
-}
 
 void
 set_atk_name_description (GtkWidget  *widget,
@@ -131,22 +67,6 @@ set_atk_name_description (GtkWidget  *widget,
 
     atk_object_set_name (aobj, name);
     atk_object_set_description (aobj, description);
-}
-
-/* This is a hack around the fact that gtk+ doesn't
- * propogate button presses on button2/3.
- */
-static gboolean
-button_press_hack (GtkWidget      *widget,
-		   GdkEventButton *event,
-		   MCData         *mc)
-{
-    if (event->button == 3 || event->button == 2) {
-	gtk_propagate_event (GTK_WIDGET (mc->applet), (GdkEvent *) event);
-	return TRUE;
-    }
-
-    return FALSE;
 }
 
 /* Send button presses on the applet to the entry. This makes Fitts' law work (ie click on the bottom
@@ -169,13 +89,13 @@ key_press_cb (GtkWidget *widget, GdkEventKey *event, MCData *mc)
 	switch (event->keyval) {	
 	case GDK_b:
 		if (event->state == GDK_CONTROL_MASK) {
-			mc_show_file_browser (NULL, mc);
+			mc_show_file_browser (NULL, NULL, mc);
 			return TRUE;
 		}
 		break;
 	case GDK_h:
 		if (event->state == GDK_CONTROL_MASK) {
-			mc_show_history (NULL, mc);
+			mc_show_history (NULL, NULL, mc);
 			return TRUE;
 		}
 		break;
@@ -190,28 +110,15 @@ key_press_cb (GtkWidget *widget, GdkEventKey *event, MCData *mc)
 void
 mc_applet_draw (MCData *mc)
 {
-    GtkWidget *icon;
-    GtkWidget *button;
-    GtkWidget *hbox_buttons;
-    MCPreferences prefs = mc->preferences;
-    int        size_frames = 0;
+
     gchar     *command_text = NULL;
 
     if (mc->entry != NULL)
 	command_text = g_strdup (gtk_editable_get_chars (GTK_EDITABLE (mc->entry), 0, -1));
 
-    mc->cmd_line_size_y = mc->preferences.normal_size_y - size_frames;   
-
     if (mc->applet_box) {
         gtk_widget_destroy (mc->applet_box);	
     }
-
-    if ( ((mc->orient == PANEL_APPLET_ORIENT_LEFT) || (mc->orient == PANEL_APPLET_ORIENT_RIGHT)) && (prefs.panel_size_x < GNOME_Vertigo_PANEL_SMALL) )
-      mc->applet_box = gtk_vbox_new (FALSE, 0);
-    else
-      mc->applet_box = gtk_hbox_new (FALSE, 0);
-
-    gtk_container_set_border_width (GTK_CONTAINER (mc->applet_box), 0);
 
     mc_create_command_entry (mc);
 
@@ -219,57 +126,21 @@ mc_applet_draw (MCData *mc)
 	gtk_entry_set_text (GTK_ENTRY (mc->entry), command_text);
 	g_free (command_text);
     }
-
-    /* hbox for message label and buttons */
-    if ((mc->orient == PANEL_APPLET_ORIENT_LEFT) || (mc->orient == PANEL_APPLET_ORIENT_RIGHT))
-      if (prefs.panel_size_x < GNOME_Vertigo_PANEL_SMALL)
-	hbox_buttons = gtk_vbox_new (TRUE, 0);
-      else
-	hbox_buttons = gtk_hbox_new (TRUE, 0);
-    else
-      if (prefs.normal_size_y > GNOME_Vertigo_PANEL_SMALL)
-	hbox_buttons = gtk_vbox_new (TRUE, 0);
-      else
-	hbox_buttons = gtk_hbox_new (TRUE, 0);
-
-    /* add file-browser button */
-    button = gtk_button_new ();
-    
-    g_signal_connect (button, "clicked",
+    mc->tooltips = gtk_tooltips_new ();
+    g_signal_connect (G_OBJECT(mc->file_select_button), "button_release_event",
 		      G_CALLBACK (mc_show_file_browser), mc);
-    g_signal_connect (button, "button_press_event",
-		      G_CALLBACK (button_press_hack), mc);
-
-    icon = gtk_image_new_from_stock (COMMANDLINE_BROWSER_STOCK, button_icon_size);
-    gtk_container_add (GTK_CONTAINER (button), icon);
-
-    gtk_widget_set_tooltip_text (button, _("Browser"));
-    gtk_box_pack_start (GTK_BOX (hbox_buttons), button, TRUE, TRUE, 0);
-	
-    set_atk_name_description (button,
+    gtk_tooltips_set_tip (mc->tooltips, mc->file_select_button, _("Browser"), NULL);
+    set_atk_name_description (mc->file_select_button,
 			      _("Browser"),
 			      _("Click this button to start the browser"));
 
-    /* add history button */
-    button = gtk_button_new ();
-    
-    g_signal_connect (button, "clicked",
+
+    g_signal_connect (G_OBJECT(mc->history_button), "button_release_event",
 		      G_CALLBACK (mc_show_history), mc);
-    g_signal_connect (button, "button_press_event",
-		      G_CALLBACK (button_press_hack), mc);
-
-    icon = gtk_image_new_from_stock (COMMANDLINE_HISTORY_STOCK, 								     button_icon_size);
-    gtk_container_add (GTK_CONTAINER (button), icon);
-
-    gtk_widget_set_tooltip_text (button, _("History"));
-    gtk_box_pack_end (GTK_BOX (hbox_buttons), button, TRUE, TRUE, 0);
-
-    set_atk_name_description (button,
+    gtk_tooltips_set_tip (mc->tooltips, mc->history_button, _("History"), NULL);
+    set_atk_name_description (mc->history_button,
 			      _("History"),
 			      _("Click this button for the list of previous commands"));
-    
-    gtk_box_pack_start (GTK_BOX (mc->applet_box), mc->entry, TRUE, TRUE, 0);
-    gtk_box_pack_start (GTK_BOX (mc->applet_box), hbox_buttons, TRUE, TRUE, 0);
 
     gtk_container_add (GTK_CONTAINER (mc->applet), mc->applet_box);
     
@@ -304,20 +175,26 @@ mc_destroyed (GtkWidget *widget,
     g_free (mc);
 }
 
+/*
 static void
 mc_orient_changed (PanelApplet *applet,
 		   PanelAppletOrient orient,
 		   MCData *mc)
 {
+ 
   mc->orient = orient;
   mc_applet_draw (mc);
 }
+*/
 
+/*
 static void
 mc_pixel_size_changed (PanelApplet *applet,
 		       GtkAllocation *allocation,
 		       MCData      *mc)
 {
+
+  
   if ((mc->orient == PANEL_APPLET_ORIENT_LEFT) || (mc->orient == PANEL_APPLET_ORIENT_RIGHT)) {
     if (mc->preferences.panel_size_x == allocation->width)
       return;
@@ -329,6 +206,117 @@ mc_pixel_size_changed (PanelApplet *applet,
   }
 
   mc_applet_draw (mc);
+
+}
+*/
+
+static void
+reset_style (GtkWidget *widget)
+{
+    GtkRcStyle *rc_style;
+
+    gtk_widget_set_style (widget, NULL);
+    rc_style = gtk_rc_style_new ();
+    gtk_widget_modify_style (widget, rc_style);
+    gtk_rc_style_unref (rc_style);
+}
+
+static void
+set_background_pixmap (GtkWidget *widget, GdkPixmap *pixmap)
+{
+    GtkStyle   *style;
+
+    style = gtk_style_copy (widget->style);
+    if (style->bg_pixmap[GTK_STATE_NORMAL])
+        g_object_unref (style->bg_pixmap[GTK_STATE_NORMAL]);
+     style->bg_pixmap[GTK_STATE_NORMAL] = g_object_ref (pixmap);
+    
+    gtk_widget_set_style (widget, style);
+    g_object_unref (style);
+   
+}
+
+static void
+prepare_pixmap_background (MCData *mc, GdkPixmap *pixmap)
+{
+
+    gint width=0, height=0, x, y;
+    GdkPixmap *small_pix=NULL;
+    GdkGC *gc;
+    
+    gdk_drawable_get_size (mc->entry->window, &width, &height);
+    small_pix= gdk_pixmap_new (pixmap, width, height, -1);
+    gc=gdk_gc_new (pixmap);
+    gdk_window_get_position (mc->entry->window, &x, &y);
+    gdk_draw_drawable (small_pix, gc, pixmap, x, y, 0, 0, width, height);
+    set_background_pixmap (mc->applet_box, pixmap);
+    set_background_pixmap (mc->entry, small_pix);
+
+    g_object_unref (gc);
+    g_object_unref (small_pix);
+
+}
+
+static void
+applet_change_background (PanelApplet               *applet,
+          PanelAppletBackgroundType  type,
+          GdkColor                  *color,
+          GdkPixmap                 *pixmap,
+          MCData *mc)
+{
+
+    if (!mc->preferences.show_default_theme)
+        return;
+    
+    reset_style (mc->entry);
+    reset_style (mc->applet_box);
+    mc->default_background=FALSE;
+    
+    switch (type) {
+        case PANEL_NO_BACKGROUND:
+            mc->default_background=TRUE;
+        break;
+        case PANEL_COLOR_BACKGROUND:
+            gtk_widget_modify_base (mc->entry, GTK_STATE_NORMAL, color);
+            gtk_widget_modify_bg (mc->applet_box, GTK_STATE_NORMAL, color);
+        break;
+        case PANEL_PIXMAP_BACKGROUND:
+            prepare_pixmap_background (mc, pixmap);
+        break;
+    }
+
+}
+
+static gboolean
+draw_background_timer (gpointer data)
+{
+
+    gint width=0, height=0;
+    PanelAppletBackgroundType  type;
+    GdkPixmap *pixmap=NULL;
+    GdkColor color;
+    MCData *mc= (MCData*) data;
+
+     if (!GDK_IS_DRAWABLE (mc->entry->window))
+         return TRUE;
+  
+     gdk_drawable_get_size (mc->entry->window, &width, &height);
+     if (width <= 1 || height <= 1)
+         return TRUE;
+
+     type = panel_applet_get_background (mc->applet, &color, &pixmap);
+        applet_change_background (mc->applet, type,  &color, pixmap, mc);
+
+     g_signal_connect (mc->applet, "change_background",
+          G_CALLBACK (applet_change_background), mc);
+
+    return FALSE;
+}
+
+static void
+on_applet_map (GtkWidget *widget,MCData *mc)
+{
+  g_timeout_add (100, draw_background_timer, mc);
 }
 
 static gboolean
@@ -370,16 +358,16 @@ mini_commander_applet_fill (PanelApplet *applet)
     panel_applet_add_preferences (applet, "/schemas/apps/mini-commander/prefs", NULL);
     panel_applet_set_flags (applet, PANEL_APPLET_EXPAND_MINOR);
     mc_load_preferences (mc);
-    command_line_init_stock_icons ();
   
-    g_signal_connect (mc->applet, "change_orient",
-		      G_CALLBACK (mc_orient_changed), mc);
-    g_signal_connect (mc->applet, "size_allocate",
-		      G_CALLBACK (mc_pixel_size_changed), mc);
-    
+    mc->file_select=NULL;
+
     mc->preferences.normal_size_y = panel_applet_get_size (applet);
     mc->orient = panel_applet_get_orient (applet);
     mc_applet_draw(mc);
+
+    g_signal_connect ((gpointer) mc->applet, "map",
+        G_CALLBACK (on_applet_map), mc);
+
     gtk_widget_show (GTK_WIDGET (mc->applet));
     
     g_signal_connect (mc->applet, "destroy", G_CALLBACK (mc_destroyed), mc); 
