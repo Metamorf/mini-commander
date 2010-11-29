@@ -60,7 +60,7 @@ AC_CHECK_FUNCS([regcomp strstr])
 
 
 GTK_DOC_CHECK([1.4])
-PKG_CHECK_MODULES(MINI_COMMANDER, gtk+-2.0 >= 2.6.0 gconf-2.0 libpanelapplet-2.0 >= 2.13.4)
+PKG_CHECK_MODULES(MINI_COMMANDER, gtk+-2.0 >= 2.6.0 gconf-2.0 libpanelapplet-2.0 >= 2.13.4 libgnomeui-2.0)
 
 AC_CONFIG_FILES([
 	Makefile

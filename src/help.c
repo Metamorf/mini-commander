@@ -20,7 +20,6 @@
  */
 
 #include <config.h>
-
 #include <libgnomeui/gnome-help.h>
 
 #include "help.h"
