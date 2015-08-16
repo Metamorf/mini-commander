@@ -1,0 +1,1 @@
+This is a small and light applet that is basically a run dialogue for the GNOME panel which includes history and the ability to run custom macros.
